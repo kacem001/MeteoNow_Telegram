@@ -5,17 +5,34 @@ import requests
 import datetime
 import re
 from dataclasses import dataclass
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 from dotenv import load_dotenv
-from telegram import Update, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler
+from telegram import (
+    Update,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    BotCommand,
+)
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+    CallbackQueryHandler,
+)
 
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise RuntimeError("Put BOT_TOKEN in .env file")
 
-logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
@@ -26,95 +43,160 @@ recent_button_hits: Dict[str, float] = {}
 
 TRANSLATIONS = {
     "en": {
-        "welcome": "Hello {name}! I'm a weather bot. Send your location (use the button) or type a city name.\nUse /help for commands.",
-        "help": "Commands:\n/start - start\n/help - this help\n/settings - open settings\n/now - weather now\n/forecast - choose forecast length\n/forecast3 - forecast for 3 days\n/forecast5 - forecast for 5 days\n/forecast7 - forecast for 7 days\n/units - units menu\n/daily - daily alert menu\n",
-        "searching_place": "Searching for location...",
-        "place_not_found": "Location not found. Try another name or share your location.",
-        "location_saved": "Location saved: {name}\nUse /now to get current weather.",
-        "no_location": "You don't have a saved location yet. Send your location or type a city name.",
-        "fetching_weather": "Fetching weather...",
-        "fetch_failed": "Failed to fetch weather. Try again later.",
-        "daily_enabled": "Daily alert enabled.",
-        "daily_disabled": "Daily alert disabled.",
-        "ask_hour": "Send an hour (0-23) for daily alert (e.g. 8). You may send formats like '8', '08', '8:00'.",
-        "hour_set": "Daily alert set to {h}:00 and enabled.",
-        "invalid_hour": "Please send a valid hour between 0 and 23.",
-        "settings_title": "⚙️ Settings",
-        "settings_items": "🌍 Language\n📍 Location\n🌡️ Units\n⏰ Daily Alert",
-        "units_current": "Current units: {units}",
-        "units_set": "Units set to {units}.",
-        "lang_set": "Language set to {lang}.",
-        "toggle_confirm": "Toggled: {state}",
-        "refresh_now": "Refresh now",
-        "forecast_days": "Forecast ({days} days):",
-        "weather_prefix_daily_notice": "⏰ Morning weather notice:",
-        "choose_lang": "Choose language:",
-        "choose_units": "Choose units:",
-        "choose_forecast": "Choose forecast length:",
-        "settings_updated": "Settings updated.",
+        "welcome": (
+            "👋 Hello <b>{name}</b>! I'm your personal weather assistant.\n\n"
+            "📍 <b>Quick Start:</b>\n"
+            "• Type any <b>city name</b> (e.g. <i>Algiers, Paris</i>)\n"
+            "• Or paste <b>coordinates</b> (e.g. <code>36.75, 3.04</code>)\n"
+            "• Or tap <b>📍 Share Location</b> below for GPS"
+        ),
+        "help": (
+            "📖 <b>Help & Commands</b>\n\n"
+            "🌤 /now — Current weather & forecast\n"
+            "📅 /forecast — Interactive 3, 5, or 7-day forecast\n"
+            "📍 /location — Change location (GPS, city, or lat/lon)\n"
+            "⚙️ /settings — Language, units, daily & severe alerts\n"
+            "❓ /help — Show this guide\n\n"
+            "💡 <i>Tip: You can type a city name or paste coordinates anytime!</i>"
+        ),
+        "btn_share_loc": "📍 Share Location",
+        "btn_now": "🌤 Weather Now",
+        "btn_forecast": "📅 Forecast",
+        "btn_settings": "⚙️ Settings",
+        "btn_help": "❓ Help",
+        "btn_refresh": "🔄 Refresh",
+        "btn_hourly": "🕒 Today Hourly",
+        "btn_home": "🏠 Home",
+        "btn_back": "« Back",
+        "searching_place": "🔍 Searching for location...",
+        "place_not_found": "❌ Location not found. Try another city name, coordinates (lat, lon), or share your GPS location.",
+        "location_saved": "✅ Location saved: <b>{name}</b>",
+        "ask_location": "📍 Tap the button below to share your GPS location, type a city name, or enter coordinates (e.g. <code>36.7538, 3.0588</code>):",
+        "no_location": "📍 You haven't set a location yet. Type a city name, paste coordinates, or tap Share Location.",
+        "fetching_weather": "⏳ Fetching weather...",
+        "fetch_failed": "⚠️ Failed to fetch weather. Please try again shortly.",
+        "ask_hour": "⏰ Send the hour (0–23) for your daily weather report (e.g. <code>8</code> or <code>08:00</code>):",
+        "hour_set": "✅ Daily report set to <b>{h}:00</b> and enabled.",
+        "invalid_hour": "⚠️ Please send a valid hour between 0 and 23.",
+        "settings_title": "⚙️ <b>Bot Settings</b>\nCustomize your weather experience:",
+        "choose_lang": "🌍 Choose your language:",
+        "choose_units": "🌡️ Choose measurement units:",
+        "choose_forecast": "📅 Select forecast duration:",
+        "forecast_days": "📅 <b>{days}-Day Forecast</b>",
+        "hourly_title": "🕒 <b>Next 12 Hours</b>",
+        "weather_prefix_daily_notice": "⏰ <b>Daily Morning Weather Report</b>",
+        "severe_alert_title": "🚨 <b>Real-Time Weather Alert</b> for <b>{city}</b>:",
+        "feels_like": "Feels like",
+        "uv_index": "UV",
+        "sunrise": "Sunrise",
+        "sunset": "Sunset",
     },
     "ar": {
-        "welcome": "مرحبا {name}! أنا بوت الطقس. أرسل موقعك (باستخدام الزر) أو اكتب اسم المدينة.\nاستخدم /help للأوامر.",
-        "help": "الأوامر:\n/start - البداية\n/help - مساعدة\n/settings - الإعدادات\n/now - الطقس الآن\n/forecast - اختيار مدة التوقع\n/forecast3 - توقع 3 أيام\n/forecast5 - توقع 5 أيام\n/forecast7 - توقع 7 أيام\n/units - قائمة الوحدات\n/daily - قائمة التنبيه اليومي\n",
-        "searching_place": "أبحث عن المكان...",
-        "place_not_found": "لم أجد المكان. جرّب اسمًا آخر أو شارك موقعك.",
-        "location_saved": "تم حفظ الموقع: {name}\nاستخدم /now للحصول على الطقس الآن.",
-        "no_location": "لم تحدد موقعًا بعد. أرسل موقعك أو اكتب اسم مدينة.",
-        "fetching_weather": "أجلب بيانات الطقس...",
-        "fetch_failed": "تعذر جلب الطقس. حاول لاحقًا.",
-        "daily_enabled": "تم تفعيل التنبيه اليومي.",
-        "daily_disabled": "تم إيقاف التنبيه اليومي.",
-        "ask_hour": "أرسل رقم الساعة (0-23) لوقت التنبيه (مثال: 8). يمكنك إرسال '8' أو '8:00'.",
-        "hour_set": "تم تعيين التنبيه اليومي إلى {h}:00 وتم التفعيل.",
-        "invalid_hour": "أرسل رقمًا صحيحًا بين 0 و 23.",
-        "settings_title": "⚙️ الإعدادات",
-        "settings_items": "🌍 اللغة\n📍 الموقع\n🌡️ الوحدات\n⏰ التنبيه اليومي",
-        "units_current": "الوحدة الحالية: {units}",
-        "units_set": "تم تغيير الوحدات إلى {units}.",
-        "lang_set": "تم تغيير اللغة إلى {lang}.",
-        "toggle_confirm": "تم التغيير: {state}",
-        "refresh_now": "تحديث الآن",
-        "forecast_days": "توقع ({days} أيام):",
-        "weather_prefix_daily_notice": "⏰ إشعار الطقس الصباحي:",
-        "choose_lang": "اختر اللغة:",
-        "choose_units": "اختر الوحدات:",
-        "choose_forecast": "اختر مدة التوقع:",
-        "settings_updated": "تم تحديث الإعدادات.",
+        "welcome": (
+            "👋 مرحباً <b>{name}</b>! أنا مساعدك الشخصي للطقس.\n\n"
+            "📍 <b>للبدء السريع:</b>\n"
+            "• اكتب اسم أي <b>مدينة</b> (مثل: <i>الجزائر، عنابة</i>)\n"
+            "• أو ألصق <b>الإحداثيات</b> (مثل: <code>36.75, 3.04</code>)\n"
+            "• أو اضغط على <b>📍 مشاركة الموقع</b> بالأسفل"
+        ),
+        "help": (
+            "📖 <b>المساعدة والأوامر</b>\n\n"
+            "🌤 /now — الطقس الحالي والتوقعات\n"
+            "📅 /forecast — توقعات 3 أو 5 أو 7 أيام\n"
+            "📍 /location — تغيير الموقع (GPS، مدينة، أو إحداثيات)\n"
+            "⚙️ /settings — اللغة، الوحدات، والتنبيهات الفورية\n"
+            "❓ /help — عرض هذه القائمة\n\n"
+            "💡 <i>تلميح: يمكنك كتابة اسم أي مدينة أو إحداثيات في أي وقت!</i>"
+        ),
+        "btn_share_loc": "📍 مشاركة الموقع",
+        "btn_now": "🌤 الطقس الآن",
+        "btn_forecast": "📅 التوقعات",
+        "btn_settings": "⚙️ الإعدادات",
+        "btn_help": "❓ مساعدة",
+        "btn_refresh": "🔄 تحديث",
+        "btn_hourly": "🕒 توقعات الساعات",
+        "btn_home": "🏠 الرئيسية",
+        "btn_back": "« رجوع",
+        "searching_place": "🔍 جاري البحث عن الموقع...",
+        "place_not_found": "❌ لم يتم العثور على الموقع. جرّب اسم مدينة آخر أو الإحداثيات.",
+        "location_saved": "✅ تم حفظ الموقع: <b>{name}</b>",
+        "ask_location": "📍 اضغط على الزر بالأسفل لمشاركة موقعك، أو اكتب اسم مدينة، أو أدخل الإحداثيات (مثل <code>36.7538, 3.0588</code>):",
+        "no_location": "📍 لم تحدد موقعاً بعد. اكتب اسم مدينة أو شارك موقعك.",
+        "fetching_weather": "⏳ جاري جلب بيانات الطقس...",
+        "fetch_failed": "⚠️ تعذر جلب الطقس. حاول مرة أخرى لاحقاً.",
+        "ask_hour": "⏰ أرسل رقم الساعة (0–23) للتنبيه اليومي (مثال: <code>8</code> أو <code>08:00</code>):",
+        "hour_set": "✅ تم ضبط التنبيه اليومي على الساعة <b>{h}:00</b> وتفعيله.",
+        "invalid_hour": "⚠️ يرجى إرسال رقم صحيح بين 0 و 23.",
+        "settings_title": "⚙️ <b>إعدادات البوت</b>\nخصص تجربتك:",
+        "choose_lang": "🌍 اختر اللغة:",
+        "choose_units": "🌡️ اختر وحدات القياس:",
+        "choose_forecast": "📅 اختر مدة التوقعات:",
+        "forecast_days": "📅 <b>توقعات {days} أيام</b>",
+        "hourly_title": "🕒 <b>الـ 12 ساعة القادمة</b>",
+        "weather_prefix_daily_notice": "⏰ <b>تقرير الطقس الصباحي</b>",
+        "severe_alert_title": "🚨 <b>تنبيه طقس فوري</b> في <b>{city}</b>:",
+        "feels_like": "الإحساس",
+        "uv_index": "الأشعة",
+        "sunrise": "الشروق",
+        "sunset": "الغروب",
     },
     "fr": {
-        "welcome": "Bonjour {name}! Je suis un bot météo. Envoyez votre position (bouton) ou tapez le nom d'une ville.\nUtilisez /help pour la liste des commandes.",
-        "help": "Commandes:\n/start - démarrer\n/help - aide\n/settings - paramètres\n/now - météo maintenant\n/forecast - choisir la durée\n/forecast3 - prévision 3 jours\n/forecast5 - prévision 5 jours\n/forecast7 - prévision 7 jours\n/units - menu unités\n/daily - menu alerte quotidienne\n",
-        "searching_place": "Recherche du lieu...",
-        "place_not_found": "Lieu introuvable. Essayez un autre nom ou partagez votre position.",
-        "location_saved": "Position sauvegardée: {name}\nUtilisez /now pour la météo.",
-        "no_location": "Vous n'avez pas de position enregistrée. Envoyez votre position ou tapez le nom d'une ville.",
-        "fetching_weather": "Récupération météo...",
-        "fetch_failed": "Impossible de récupérer la météo. Réessayez plus tard.",
-        "daily_enabled": "Alerte quotidienne activée.",
-        "daily_disabled": "Alerte quotidienne désactivée.",
-        "ask_hour": "Envoyez une heure (0-23) pour l'alerte quotidienne (ex: 8). Vous pouvez envoyer '8' ou '8:00'.",
-        "hour_set": "Alerte quotidienne réglée à {h}:00 et activée.",
-        "invalid_hour": "Veuillez envoyer une heure valide entre 0 et 23.",
-        "settings_title": "⚙️ Paramètres",
-        "settings_items": "🌍 Langue\n📍 Position\n🌡️ Unités\n⏰ Alerte quotidienne",
-        "units_current": "Unités actuelles: {units}",
-        "units_set": "Unités définies sur {units}.",
-        "lang_set": "Langue définie sur {lang}.",
-        "toggle_confirm": "Basculé: {state}",
-        "refresh_now": "Rafraîchir maintenant",
-        "forecast_days": "Prévisions ({days} jours):",
-        "weather_prefix_daily_notice": "⏰ Alerte météo matinale:",
-        "choose_lang": "Choisissez la langue:",
-        "choose_units": "Choisissez les unités:",
-        "choose_forecast": "Choisissez la durée:",
-        "settings_updated": "Paramètres mis à jour.",
-    }
+        "welcome": (
+            "👋 Bonjour <b>{name}</b> ! Je suis votre assistant météo.\n\n"
+            "📍 <b>Démarrage rapide :</b>\n"
+            "• Tapez le nom d'une <b>ville</b> (ex. <i>Alger, Paris</i>)\n"
+            "• Ou collez des <b>coordonnées</b> (ex. <code>36.75, 3.04</code>)\n"
+            "• Ou appuyez sur <b>📍 Partager ma position</b> ci-dessous"
+        ),
+        "help": (
+            "📖 <b>Aide & Commandes</b>\n\n"
+            "🌤 /now — Météo actuelle et prévisions\n"
+            "📅 /forecast — Prévisions sur 3, 5 ou 7 jours\n"
+            "📍 /location — Changer de lieu (GPS, ville ou lat/lon)\n"
+            "⚙️ /settings — Langue, unités, alertes quotidiennes & météo\n"
+            "❓ /help — Afficher ce guide\n\n"
+            "💡 <i>Astuce : Tapez une ville ou des coordonnées à tout moment !</i>"
+        ),
+        "btn_share_loc": "📍 Partager ma position",
+        "btn_now": "🌤 Météo Actuelle",
+        "btn_forecast": "📅 Prévisions",
+        "btn_settings": "⚙️ Paramètres",
+        "btn_help": "❓ Aide",
+        "btn_refresh": "🔄 Actualiser",
+        "btn_hourly": "🕒 Heure par heure",
+        "btn_home": "🏠 Accueil",
+        "btn_back": "« Retour",
+        "searching_place": "🔍 Recherche du lieu...",
+        "place_not_found": "❌ Lieu introuvable. Essayez une autre ville ou des coordonnées.",
+        "location_saved": "✅ Position enregistrée : <b>{name}</b>",
+        "ask_location": "📍 Appuyez sur le bouton ci-dessous pour partager votre GPS, tapez une ville ou entrez des coordonnées (ex. <code>36.7538, 3.0588</code>) :",
+        "no_location": "📍 Aucune position enregistrée. Tapez une ville ou partagez votre position.",
+        "fetching_weather": "⏳ Récupération de la météo...",
+        "fetch_failed": "⚠️ Impossible de récupérer la météo. Réessayez plus tard.",
+        "ask_hour": "⏰ Envoyez l'heure (0–23) pour l'alerte quotidienne (ex. <code>8</code> ou <code>08:00</code>) :",
+        "hour_set": "✅ Alerte quotidienne réglée à <b>{h}:00</b> et activée.",
+        "invalid_hour": "⚠️ Veuillez envoyer une heure valide entre 0 et 23.",
+        "settings_title": "⚙️ <b>Paramètres</b>\nPersonnalisez votre expérience :",
+        "choose_lang": "🌍 Choisissez votre langue :",
+        "choose_units": "🌡️ Choisissez les unités :",
+        "choose_forecast": "📅 Choisissez la durée :",
+        "forecast_days": "📅 <b>Prévisions ({days} jours)</b>",
+        "hourly_title": "🕒 <b>Prochaines 12 heures</b>",
+        "weather_prefix_daily_notice": "⏰ <b>Bulletin météo matinal</b>",
+        "severe_alert_title": "🚨 <b>Alerte météo en temps réel</b> pour <b>{city}</b> :",
+        "feels_like": "Ressenti",
+        "uv_index": "UV",
+        "sunrise": "Lever",
+        "sunset": "Coucher",
+    },
 }
 
-def t(chat_id: int, key: str, **kwargs):
+
+def t(chat_id: int, key: str, **kwargs) -> str:
     lang = get_user_pref(chat_id).get("language", "en")
     text = TRANSLATIONS.get(lang, TRANSLATIONS["en"]).get(key, "")
-    return text.format(**kwargs)
+    return text.format(**kwargs) if kwargs else text
+
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -128,24 +210,52 @@ def init_db():
         units TEXT DEFAULT 'metric',
         daily_enabled INTEGER DEFAULT 0,
         daily_hour INTEGER DEFAULT 8,
-        language TEXT DEFAULT 'en'
+        language TEXT DEFAULT 'en',
+        alerts_enabled INTEGER DEFAULT 1,
+        last_alert_sig TEXT DEFAULT ''
     )
     """)
+    existing_cols = {row[1] for row in c.execute("PRAGMA table_info(users)").fetchall()}
+    if "alerts_enabled" not in existing_cols:
+        c.execute("ALTER TABLE users ADD COLUMN alerts_enabled INTEGER DEFAULT 1")
+    if "last_alert_sig" not in existing_cols:
+        c.execute("ALTER TABLE users ADD COLUMN last_alert_sig TEXT DEFAULT ''")
     conn.commit()
     conn.close()
 
+
 init_db()
 
-def save_user(chat_id: int, loc: Optional[dict] = None, units: Optional[str] = None,
-            daily: Optional[int] = None, daily_hour: Optional[int] = None, language: Optional[str] = None):
+
+def user_exists(chat_id: int) -> bool:
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT 1 FROM users WHERE chat_id=?", (chat_id,))
+    exists = c.fetchone() is not None
+    conn.close()
+    return exists
+
+
+def save_user(
+    chat_id: int,
+    loc: Optional[dict] = None,
+    units: Optional[str] = None,
+    daily: Optional[int] = None,
+    daily_hour: Optional[int] = None,
+    language: Optional[str] = None,
+    alerts_enabled: Optional[int] = None,
+    last_alert_sig: Optional[str] = None,
+):
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute("INSERT OR IGNORE INTO users (chat_id) VALUES (?)", (chat_id,))
         if loc:
-            c.execute("UPDATE users SET latitude=?, longitude=?, location_name=? WHERE chat_id=?",
-                      (loc["lat"], loc["lon"], loc["name"], chat_id))
+            c.execute(
+                "UPDATE users SET latitude=?, longitude=?, location_name=?, last_alert_sig='' WHERE chat_id=?",
+                (loc["lat"], loc["lon"], loc["name"], chat_id),
+            )
         if units:
             c.execute("UPDATE users SET units=? WHERE chat_id=?", (units, chat_id))
         if daily is not None:
@@ -154,6 +264,10 @@ def save_user(chat_id: int, loc: Optional[dict] = None, units: Optional[str] = N
             c.execute("UPDATE users SET daily_hour=? WHERE chat_id=?", (int(daily_hour), chat_id))
         if language:
             c.execute("UPDATE users SET language=? WHERE chat_id=?", (language, chat_id))
+        if alerts_enabled is not None:
+            c.execute("UPDATE users SET alerts_enabled=? WHERE chat_id=?", (int(bool(alerts_enabled)), chat_id))
+        if last_alert_sig is not None:
+            c.execute("UPDATE users SET last_alert_sig=? WHERE chat_id=?", (last_alert_sig, chat_id))
         conn.commit()
     except Exception as e:
         logger.error(f"Error saving user data: {e}")
@@ -163,31 +277,58 @@ def save_user(chat_id: int, loc: Optional[dict] = None, units: Optional[str] = N
         if conn:
             conn.close()
 
-def get_user_pref(chat_id: int):
+
+def get_user_pref(chat_id: int) -> Dict[str, Any]:
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
-        c.execute("SELECT latitude, longitude, location_name, units, daily_enabled, daily_hour, language FROM users WHERE chat_id=?", (chat_id,))
+        c.execute(
+            "SELECT latitude, longitude, location_name, units, daily_enabled, daily_hour, language, alerts_enabled, last_alert_sig FROM users WHERE chat_id=?",
+            (chat_id,),
+        )
         row = c.fetchone()
         if not row:
-            return {"latitude": None, "longitude": None, "location_name": None, "units": "metric", "daily_enabled": False, "daily_hour": 8, "language":"en"}
-        lat, lon, name, units, daily_enabled, daily_hour, language = row
+            return {
+                "latitude": None,
+                "longitude": None,
+                "location_name": None,
+                "units": "metric",
+                "daily_enabled": False,
+                "daily_hour": 8,
+                "language": "en",
+                "alerts_enabled": True,
+                "last_alert_sig": "",
+            }
+        lat, lon, name, units, daily_enabled, daily_hour, language, alerts_enabled, last_alert_sig = row
         return {
             "latitude": lat,
             "longitude": lon,
             "location_name": name,
-            "units": units,
+            "units": units or "metric",
             "daily_enabled": bool(daily_enabled),
             "daily_hour": int(daily_hour) if daily_hour is not None else 8,
             "language": language or "en",
+            "alerts_enabled": bool(alerts_enabled) if alerts_enabled is not None else True,
+            "last_alert_sig": last_alert_sig or "",
         }
     except Exception as e:
         logger.error(f"Error getting user preferences: {e}")
-        return {"latitude": None, "longitude": None, "location_name": None, "units": "metric", "daily_enabled": False, "daily_hour": 8, "language":"en"}
+        return {
+            "latitude": None,
+            "longitude": None,
+            "location_name": None,
+            "units": "metric",
+            "daily_enabled": False,
+            "daily_hour": 8,
+            "language": "en",
+            "alerts_enabled": True,
+            "last_alert_sig": "",
+        }
     finally:
         if conn:
             conn.close()
+
 
 @dataclass
 class Location:
@@ -195,14 +336,56 @@ class Location:
     lon: float
     name: str
 
+
+def parse_coordinates(text: str) -> Optional[Tuple[float, float]]:
+    match = re.match(r"^\s*(-?\d{1,2}(?:\.\d+)?)\s*[,;\s]\s*(-?\d{1,3}(?:\.\d+)?)\s*$", text)
+    if not match:
+        return None
+    lat, lon = float(match.group(1)), float(match.group(2))
+    if -90 <= lat <= 90 and -180 <= lon <= 180:
+        return lat, lon
+    return None
+
+
+def reverse_geocode(lat: float, lon: float, accept_language: str = "en") -> str:
+    key = f"rev:{lat:.3f},{lon:.3f}__{accept_language}"
+    if key in geocode_cache:
+        return geocode_cache[key]
+    url = "https://nominatim.openstreetmap.org/reverse"
+    params = {"lat": lat, "lon": lon, "format": "json", "zoom": 10}
+    headers = {"User-Agent": "TelegramWeatherBot/2.0", "Accept-Language": accept_language}
+    try:
+        r = requests.get(url, params=params, headers=headers, timeout=8)
+        r.raise_for_status()
+        data = r.json()
+        addr = data.get("address", {})
+        city = addr.get("city") or addr.get("town") or addr.get("village") or addr.get("state")
+        country = addr.get("country")
+        if city and country:
+            name = f"{city}, {country}"
+        else:
+            name = data.get("display_name", f"{lat:.4f}, {lon:.4f}")
+        geocode_cache[key] = name
+        return name
+    except Exception:
+        return f"{lat:.4f}, {lon:.4f}"
+
+
 def geocode_place(query: str, accept_language: str = "en") -> Optional[Location]:
-    key = f"{query}__{accept_language}"
+    coords = parse_coordinates(query)
+    if coords:
+        lat, lon = coords
+        name = reverse_geocode(lat, lon, accept_language)
+        return Location(lat=lat, lon=lon, name=name)
+
+    key = f"{query.lower()}__{accept_language}"
     if key in geocode_cache:
         v = geocode_cache[key]
         return Location(lat=v["lat"], lon=v["lon"], name=v["name"])
+
     url = "https://nominatim.openstreetmap.org/search"
     params = {"q": query, "format": "json", "limit": 1}
-    headers = {"User-Agent": "TelegramWeatherBot/1.0", "Accept-Language": accept_language}
+    headers = {"User-Agent": "TelegramWeatherBot/2.0", "Accept-Language": accept_language}
     try:
         r = requests.get(url, params=params, headers=headers, timeout=10)
         r.raise_for_status()
@@ -217,24 +400,26 @@ def geocode_place(query: str, accept_language: str = "en") -> Optional[Location]
         logger.exception("geocode failed")
         return None
 
+
 def fetch_weather(lat: float, lon: float, units: str = "metric", days: int = 3) -> Optional[dict]:
     temp_unit = "fahrenheit" if units == "imperial" else "celsius"
     wind_unit = "mph" if units == "imperial" else "kmh"
-    pressure_unit = "hpa"
     precip_unit = "inch" if units == "imperial" else "mm"
-    daily_vars = "temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum,sunrise,sunset"
-    current_vars = "temperature_2m,relative_humidity_2m,precipitation,weathercode,windspeed_10m,pressure_msl"
+    daily_vars = "temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum,sunrise,sunset,uv_index_max"
+    current_vars = "temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weathercode,windspeed_10m,pressure_msl"
+    hourly_vars = "temperature_2m,weathercode,precipitation_probability"
     url = "https://api.open-meteo.com/v1/forecast"
     params = {
         "latitude": lat,
         "longitude": lon,
         "current": current_vars,
+        "hourly": hourly_vars,
         "daily": daily_vars,
         "timezone": "auto",
         "temperature_unit": temp_unit,
         "windspeed_unit": wind_unit,
         "precipitation_unit": precip_unit,
-        "forecast_days": days,
+        "forecast_days": max(days, 1),
     }
     try:
         r = requests.get(url, params=params, timeout=10)
@@ -244,41 +429,39 @@ def fetch_weather(lat: float, lon: float, units: str = "metric", days: int = 3) 
         logger.exception("weather fetch failed")
         return None
 
+
 WEATHER_CODES = {
-    0: "☀️ Clear",
-    1: "🌤 Mostly clear",
-    2: "⛅ Partly cloudy",
-    3: "☁️ Overcast",
-    45: "🌫 Fog",
-    48: "🌫 Rime fog",
-    51: "🌦 Light drizzle",
-    53: "🌧 Moderate drizzle",
-    55: "🌧 Dense drizzle",
-    56: "🌧 Freezing drizzle: light",
-    57: "🌧 Freezing drizzle: dense",
-    61: "🌦 Rain: slight",
-    63: "🌧 Rain: moderate",
-    65: "🌧 Heavy rain",
-    66: "🌧 Freezing rain: light",
-    67: "🌧 Freezing rain: heavy",
-    71: "🌨 Snow: slight",
-    73: "🌨 Snow: moderate",
-    75: "❄️ Snow heavy",
-    77: "❄️ Snow grains",
-    80: "🌦 Rain showers: slight",
-    81: "🌧 Rain showers: moderate",
-    82: "🌧 Rain showers: violent",
-    85: "🌨 Snow showers: slight",
-    86: "🌨 Snow showers: heavy",
-    95: "⛈ Thunderstorm",
-    96: "⛈ Thunderstorm with hail",
-    99: "⛈ Violent storm",
+    0: ("☀️ Clear", "☀️ صافٍ", "☀️ Dégagé"),
+    1: ("🌤 Mostly clear", "🌤 صافٍ غالباً", "🌤 Plutôt dégagé"),
+    2: ("⛅ Partly cloudy", "⛅ غائم جزئياً", "⛅ Partiellement nuageux"),
+    3: ("☁️ Overcast", "☁️ غائم", "☁️ Couvert"),
+    45: ("🌫 Fog", "🌫 ضباب", "🌫 Brouillard"),
+    48: ("🌫 Rime fog", "🌫 ضباب متجمد", "🌫 Brouillard givrant"),
+    51: ("🌦 Light drizzle", "🌦 رذاذ خفيف", "🌦 Bruine légère"),
+    53: ("🌧 Moderate drizzle", "🌧 رذاذ معتدل", "🌧 Bruine modérée"),
+    55: ("🌧 Dense drizzle", "🌧 رذاذ كثيف", "🌧 Bruine dense"),
+    61: ("🌦 Slight rain", "🌦 مطر خفيف", "🌦 Pluie légère"),
+    63: ("🌧 Moderate rain", "🌧 مطر معتدل", "🌧 Pluie modérée"),
+    65: ("🌧 Heavy rain", "🌧 مطر غزير", "🌧 Forte pluie"),
+    71: ("🌨 Slight snow", "🌨 ثلوج خفيفة", "🌨 Neige légère"),
+    73: ("🌨 Moderate snow", "🌨 ثلوج معتدلة", "🌨 Neige modérée"),
+    75: ("❄️ Heavy snow", "❄️ ثلوج كثيفة", "❄️ Fortes chutes de neige"),
+    80: ("🌦 Rain showers", "🌦 زخات مطر", "🌦 Averses"),
+    81: ("🌧 Moderate showers", "🌧 زخات مطر معتدلة", "🌧 Averses modérées"),
+    82: ("🌧 Violent showers", "🌧 زخات مطر عنيفة", "🌧 Averses violentes"),
+    95: ("⛈ Thunderstorm", "⛈ عاصفة رعدية", "⛈ Orage"),
+    96: ("⛈ Thunderstorm & hail", "⛈ عاصفة رعدية وبَرَد", "⛈ Orage et grêle"),
+    99: ("⛈ Severe thunderstorm", "⛈ عاصفة رعدية شديدة", "⛈ Orage violent"),
 }
 
-def describe_weather_code(code: int):
-    return WEATHER_CODES.get(code, "🌈 Weather")
 
-def format_current_and_forecast(data: dict, loc_name: str, units: str, days: int = 3, lang: str = "en"):
+def describe_weather_code(code: int, lang: str = "en") -> str:
+    idx = 1 if lang == "ar" else 2 if lang == "fr" else 0
+    entry = WEATHER_CODES.get(code)
+    return entry[idx] if entry else "🌈 Weather"
+
+
+def format_current_and_forecast(data: dict, loc_name: str, units: str, days: int = 3, lang: str = "en") -> str:
     lines = []
     current = data.get("current", {})
     daily = data.get("daily", {})
@@ -286,32 +469,27 @@ def format_current_and_forecast(data: dict, loc_name: str, units: str, days: int
     unit_symbol = "F" if units == "imperial" else "C"
     wind_unit = "mph" if units == "imperial" else "km/h"
     precip_unit = "in" if units == "imperial" else "mm"
-    
-    # Extract city name from location (first part before comma)
+    tr = TRANSLATIONS.get(lang, TRANSLATIONS["en"])
+
     city_name = loc_name.split(",")[0].strip() if "," in loc_name else loc_name
-    
+
     if current:
         temp = current.get("temperature_2m")
+        feels = current.get("apparent_temperature")
         wind = current.get("windspeed_10m")
         wc = current.get("weathercode")
         humidity = current.get("relative_humidity_2m")
         pressure = current.get("pressure_msl")
         precip = current.get("precipitation")
-        
-        # Header with location
-        lines.append(f"╔═══════════════════════════")
-        lines.append(f"║ 📍 <b>{city_name}</b>")
-        lines.append(f"║ 🕐 {timezone.split('/')[-1].replace('_', ' ')}")
-        lines.append(f"╚═══════════════════════════")
+
+        lines.append(f"📍 <b>{city_name}</b>  •  🕐 {timezone.split('/')[-1].replace('_', ' ')}")
+        lines.append("━━━━━━━━━━━━━━━━━━━━━")
+        lines.append(f"<b>🌡 {temp}°{unit_symbol}</b>  {describe_weather_code(wc, lang)}")
+        if feels is not None:
+            lines.append(f"🤒 {tr['feels_like']}: <b>{feels}°{unit_symbol}</b>")
         lines.append("")
-        
-        # Current weather - main info
-        lines.append(f"<b>🌡 {temp}°{unit_symbol}</b>  {describe_weather_code(wc)}")
-        lines.append("")
-        
-        # Details in compact format
-        details = []
-        details.append(f"💨 {wind} {wind_unit}")
+
+        details = [f"💨 {wind} {wind_unit}"]
         if humidity is not None:
             details.append(f"💧 {humidity}%")
         if pressure is not None:
@@ -320,7 +498,7 @@ def format_current_and_forecast(data: dict, loc_name: str, units: str, days: int
             details.append(f"☔ {precip} {precip_unit}")
         lines.append(" │ ".join(details))
         lines.append("")
-    
+
     dates = daily.get("time", [])
     tmax = daily.get("temperature_2m_max", [])
     tmin = daily.get("temperature_2m_min", [])
@@ -328,145 +506,248 @@ def format_current_and_forecast(data: dict, loc_name: str, units: str, days: int
     precip_sum = daily.get("precipitation_sum", [])
     sunrise = daily.get("sunrise", [])
     sunset = daily.get("sunset", [])
-    
+    uv_max = daily.get("uv_index_max", [])
+
     if dates:
-        lines.append("─────────────────────────")
-        header = TRANSLATIONS.get(lang, TRANSLATIONS["en"]).get("forecast_days", "📅 <b>{days}-Day Forecast</b>").format(days=days)
-        lines.append(header)
-        lines.append("─────────────────────────")
-        
-        for i, d in enumerate(dates):
-            if i >= days:
-                break
-            
-            # Format date as weekday
+        lines.append("─────────────────────")
+        lines.append(tr["forecast_days"].format(days=days))
+        lines.append("─────────────────────")
+
+        for i, d in enumerate(dates[:days]):
             date_obj = datetime.datetime.strptime(d, "%Y-%m-%d")
             day_name = date_obj.strftime("%a, %b %d")
-            
-            # Temperature range
             temp_range = f"{int(tmin[i])}° ─ {int(tmax[i])}°"
-            
-            # Condition
-            condition = describe_weather_code(codes[i])
-            
-            lines.append(f"<b>{day_name}</b>")
-            lines.append(f"  {condition}")
+            condition = describe_weather_code(codes[i], lang)
+
+            lines.append(f"<b>{day_name}</b> • {condition}")
             temp_line = f"  🌡 {temp_range}"
-            
-            # Add precipitation if present
             if precip_sum and i < len(precip_sum) and precip_sum[i] > 0:
                 temp_line += f"  │  ☔ {precip_sum[i]}{precip_unit}"
-            
+            if i == 0 and uv_max and uv_max[0] is not None:
+                temp_line += f"  │  ☀️ {tr['uv_index']}: {uv_max[0]}"
             lines.append(temp_line)
-            
-            # Add sunrise/sunset for today only
+
             if i == 0 and sunrise and sunset:
                 try:
-                    sr_time = sunrise[0].split("T")[1][:5] if "T" in sunrise[0] else sunrise[0][-5:]
-                    ss_time = sunset[0].split("T")[1][:5] if "T" in sunset[0] else sunset[0][-5:]
-                    
-                    if lang == "en":
-                        lines.append(f"  🌅 Sunrise: {sr_time}  │  🌇 Sunset: {ss_time}")
-                    elif lang == "ar":
-                        lines.append(f"  🌅 الشروق: {sr_time}  │  🌇 الغروب: {ss_time}")
-                    else:  # fr
-                        lines.append(f"  🌅 Lever: {sr_time}  │  🌇 Coucher: {ss_time}")
+                    sr_time = sunrise[0].split("T")[1][:5]
+                    ss_time = sunset[0].split("T")[1][:5]
+                    lines.append(f"  🌅 {tr['sunrise']}: {sr_time}  │  🌇 {tr['sunset']}: {ss_time}")
                 except Exception:
                     pass
-            
-            if i < days - 1:
+
+            if i < min(days, len(dates)) - 1:
                 lines.append("")
-    
+
     return "\n".join(lines)
 
-def build_settings_keyboard(chat_id: int):
+
+def format_hourly_forecast(data: dict, loc_name: str, units: str, lang: str = "en") -> str:
+    tr = TRANSLATIONS.get(lang, TRANSLATIONS["en"])
+    unit_symbol = "F" if units == "imperial" else "C"
+    city_name = loc_name.split(",")[0].strip() if "," in loc_name else loc_name
+    hourly = data.get("hourly", {})
+    times = hourly.get("time", [])
+    temps = hourly.get("temperature_2m", [])
+    codes = hourly.get("weathercode", [])
+    probs = hourly.get("precipitation_probability", [])
+
+    current_time_str = data.get("current", {}).get("time", "")
+    start_idx = 0
+    if current_time_str and times:
+        prefix = current_time_str[:13]
+        for idx, tm in enumerate(times):
+            if tm.startswith(prefix):
+                start_idx = idx
+                break
+
+    lines = [f"📍 <b>{city_name}</b> — {tr['hourly_title']}", "━━━━━━━━━━━━━━━━━━━━━"]
+    for i in range(start_idx, min(start_idx + 12, len(times))):
+        hour_str = times[i].split("T")[1][:5]
+        cond = describe_weather_code(codes[i], lang)
+        prob_str = f"  💧{probs[i]}%" if i < len(probs) and probs[i] is not None else ""
+        lines.append(f"<code>{hour_str}</code>  <b>{temps[i]}°{unit_symbol}</b>  {cond}{prob_str}")
+
+    return "\n".join(lines)
+
+
+def build_home_keyboard(chat_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(t(chat_id, "btn_now"), callback_data="quick_now"),
+            InlineKeyboardButton(t(chat_id, "btn_forecast"), callback_data="quick_fc"),
+        ],
+        [
+            InlineKeyboardButton(t(chat_id, "btn_share_loc"), callback_data="prompt_location"),
+        ],
+        [
+            InlineKeyboardButton(t(chat_id, "btn_settings"), callback_data="back_to_settings"),
+            InlineKeyboardButton(t(chat_id, "btn_help"), callback_data="show_help"),
+        ],
+    ])
+
+
+def build_weather_keyboard(chat_id: int, active_days: int = 3) -> InlineKeyboardMarkup:
+    lang = get_user_pref(chat_id).get("language", "en")
+    tr = TRANSLATIONS.get(lang, TRANSLATIONS["en"])
+    day_buttons = []
+    for d in (3, 5, 7):
+        label = f"• {d}d •" if d == active_days else f"{d}d"
+        day_buttons.append(InlineKeyboardButton(label, callback_data=f"fc_{d}"))
+    return InlineKeyboardMarkup([
+        day_buttons,
+        [
+            InlineKeyboardButton(tr["btn_hourly"], callback_data="view_hourly"),
+            InlineKeyboardButton(tr["btn_refresh"], callback_data=f"refresh_{active_days}"),
+        ],
+        [
+            InlineKeyboardButton(tr["btn_home"], callback_data="back_home"),
+        ],
+    ])
+
+
+def build_settings_keyboard(chat_id: int) -> InlineKeyboardMarkup:
     prefs = get_user_pref(chat_id)
     lang = prefs.get("language", "en")
     units = prefs.get("units", "metric")
     daily_enabled = prefs.get("daily_enabled", False)
     daily_hour = prefs.get("daily_hour", 8)
-    
+    alerts_enabled = prefs.get("alerts_enabled", True)
+
     units_display = "°C" if units == "metric" else "°F"
-    units_text = f"🌡️ Units: {units_display}"
-    
-    if daily_enabled:
-        daily_text = f"⏰ Daily: ON ({daily_hour}:00)"
-    else:
-        daily_text = "⏰ Daily: OFF"
-    
+    daily_text = f"⏰ Daily: ON ({daily_hour}:00)" if daily_enabled else "⏰ Daily: OFF"
+    alerts_text = f"🚨 Severe Alerts: {'ON' if alerts_enabled else 'OFF'}"
+
     kb = [
-        [InlineKeyboardButton("🌍 " + ("Language" if lang=="en" else "اللغة" if lang=="ar" else "Langue"), callback_data="set_lang")],
-        [InlineKeyboardButton(units_text, callback_data="set_units")],
+        [InlineKeyboardButton("🌍 " + ("Language" if lang == "en" else "اللغة" if lang == "ar" else "Langue"), callback_data="set_lang")],
+        [InlineKeyboardButton(f"🌡️ Units: {units_display}", callback_data="set_units")],
         [InlineKeyboardButton(daily_text, callback_data="set_daily")],
+        [InlineKeyboardButton(alerts_text, callback_data="toggle_alerts")],
+        [InlineKeyboardButton("📍 Change Location", callback_data="prompt_location")],
+        [InlineKeyboardButton(t(chat_id, "btn_home"), callback_data="back_home")],
     ]
     return InlineKeyboardMarkup(kb)
 
-def rate_limit_key(chat_id: int, action: str):
-    return f"{chat_id}:{action}"
 
-def throttle(chat_id: int, action: str, interval: float = 0.7) -> bool:
-    key = rate_limit_key(chat_id, action)
+def compact_location_keyboard(chat_id: int) -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        [[KeyboardButton(t(chat_id, "btn_share_loc"), request_location=True)]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+
+
+def throttle(chat_id: int, action: str, interval: float = 0.6) -> bool:
+    key = f"{chat_id}:{action}"
     now = datetime.datetime.now(datetime.timezone.utc).timestamp()
-    last = recent_button_hits.get(key, 0)
-    if now - last < interval:
+    if now - recent_button_hits.get(key, 0) < interval:
         return False
     recent_button_hits[key] = now
     return True
 
+
+async def send_weather_card(target, chat_id: int, days: int = 3, edit: bool = False):
+    prefs = get_user_pref(chat_id)
+    if not prefs.get("latitude"):
+        msg = t(chat_id, "no_location")
+        if edit:
+            await target.edit_message_text(msg, reply_markup=build_home_keyboard(chat_id))
+        else:
+            await target.reply_text(msg, reply_markup=compact_location_keyboard(chat_id))
+        return
+
+    data = fetch_weather(prefs["latitude"], prefs["longitude"], units=prefs["units"], days=days)
+    if not data:
+        err = t(chat_id, "fetch_failed")
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton(t(chat_id, "btn_home"), callback_data="back_home")]])
+        if edit:
+            await target.edit_message_text(err, reply_markup=kb)
+        else:
+            await target.reply_text(err, reply_markup=kb)
+        return
+
+    txt = format_current_and_forecast(
+        data, prefs["location_name"] or "Your Location", units=prefs["units"], days=days, lang=prefs["language"]
+    )
+    kb = build_weather_keyboard(chat_id, active_days=days)
+    if edit:
+        await target.edit_message_text(txt, parse_mode="HTML", reply_markup=kb)
+    else:
+        await target.reply_html(txt, reply_markup=kb)
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     user = update.effective_user
-    name = user.first_name or ""
-    prefs = get_user_pref(chat.id)
-    lang = prefs.get("language", "en")
-    msg = TRANSLATIONS.get(lang, TRANSLATIONS["en"])["welcome"].format(name=name)
-    keyboard = [[KeyboardButton("Share location 📍", request_location=True)]]
-    await context.bot.send_message(chat_id=chat.id, text=msg, reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True))
+    name = user.first_name or "there"
+
+    if not user_exists(chat.id):
+        tg_lang = (user.language_code or "en")[:2].lower()
+        detected = tg_lang if tg_lang in ("en", "ar", "fr") else "en"
+        save_user(chat.id, language=detected)
+
+    await update.message.reply_html(
+        t(chat.id, "welcome", name=name),
+        reply_markup=build_home_keyboard(chat.id),
+    )
+
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(t(update.effective_chat.id, "help"))
+    kb = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(t(update.effective_chat.id, "btn_now"), callback_data="quick_now"),
+            InlineKeyboardButton(t(update.effective_chat.id, "btn_home"), callback_data="back_home"),
+        ]
+    ])
+    await update.message.reply_html(t(update.effective_chat.id, "help"), reply_markup=kb)
+
+
+async def location_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    pending_action[chat_id] = "set_location"
+    await update.message.reply_html(
+        t(chat_id, "ask_location"),
+        reply_markup=compact_location_keyboard(chat_id),
+    )
+
 
 async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    text = t(chat_id, "settings_title")
-    await update.message.reply_text(text, reply_markup=build_settings_keyboard(chat_id))
+    await update.message.reply_html(t(chat_id, "settings_title"), reply_markup=build_settings_keyboard(chat_id))
 
-async def setlocation_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    keyboard = [[KeyboardButton("Share location 📍", request_location=True)]]
-    msg = t(chat_id, "place_not_found") if chat_id in pending_action else "Please share your location using the button below, or type a city name."
-    await update.message.reply_text(msg, reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True))
-    pending_action[chat_id] = "set_location"
 
 async def handle_location_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     loc_obj = update.message.location
     if not loc_obj:
-        await update.message.reply_text("No location received.")
         return
-    name = f"Lat {loc_obj.latitude:.4f}, Lon {loc_obj.longitude:.4f}"
-    loc = {"lat": loc_obj.latitude, "lon": loc_obj.longitude, "name": name}
+    lang = get_user_pref(chat_id).get("language", "en")
+    resolved_name = reverse_geocode(loc_obj.latitude, loc_obj.longitude, accept_language=lang)
+    loc = {"lat": loc_obj.latitude, "lon": loc_obj.longitude, "name": resolved_name}
     save_user(chat_id, loc=loc)
     pending_action.pop(chat_id, None)
-    await update.message.reply_text(t(chat_id, "location_saved", name=name), reply_markup=ReplyKeyboardRemove())
+
+    await update.message.reply_html(
+        t(chat_id, "location_saved", name=resolved_name),
+        reply_markup=ReplyKeyboardRemove(),
+    )
+    await send_weather_card(update.message, chat_id, days=3, edit=False)
+
 
 def parse_hour_from_text(text: str) -> Optional[int]:
-    text = text.strip()
-    m = re.search(r"\b([0-1]?\d|2[0-3])\b", text)
+    m = re.search(r"\b([0-1]?\d|2[0-3])\b", text.strip())
     if m:
-        try:
-            val = int(m.group(1))
-            if 0 <= val <= 23:
-                return val
-        except Exception:
-            return None
+        val = int(m.group(1))
+        if 0 <= val <= 23:
+            return val
     return None
+
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     text = update.message.text.strip()
     prefs = get_user_pref(chat_id)
     user_lang = prefs.get("language", "en")
+
     if pending_action.get(chat_id) == "set_hour":
         h = parse_hour_from_text(text)
         if h is None:
@@ -474,90 +755,56 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         save_user(chat_id, daily_hour=h, daily=1)
         if context.job_queue:
-            jobs = context.job_queue.get_jobs_by_name(str(chat_id))
-            for j in jobs:
+            for j in context.job_queue.get_jobs_by_name(str(chat_id)):
                 j.schedule_removal()
-            context.job_queue.run_daily(send_daily_weather, time=datetime.time(h, 0), chat_id=chat_id, name=str(chat_id))
+            context.job_queue.run_daily(
+                send_daily_weather, time=datetime.time(h, 0), chat_id=chat_id, name=str(chat_id)
+            )
         pending_action.pop(chat_id, None)
-        await update.message.reply_text(t(chat_id, "hour_set", h=h), reply_markup=ReplyKeyboardRemove())
-        await update.message.reply_text(t(chat_id, "settings_title"), reply_markup=build_settings_keyboard(chat_id))
+        await update.message.reply_html(t(chat_id, "hour_set", h=h), reply_markup=ReplyKeyboardRemove())
+        await update.message.reply_html(t(chat_id, "settings_title"), reply_markup=build_settings_keyboard(chat_id))
         return
-    if pending_action.get(chat_id) == "set_location":
-        await update.message.reply_text(t(chat_id, "searching_place"))
-        loc = geocode_place(text, accept_language=user_lang)
-        if not loc:
-            await update.message.reply_text(t(chat_id, "place_not_found"))
-            return
-        save_user(chat_id, loc={"lat": loc.lat, "lon": loc.lon, "name": loc.name})
-        pending_action.pop(chat_id, None)
-        await update.message.reply_text(t(chat_id, "location_saved", name=loc.name), reply_markup=ReplyKeyboardRemove())
-        return
+
     if text.startswith("/"):
         return
-    await update.message.reply_text(t(chat_id, "searching_place"))
+
+    status_msg = await update.message.reply_text(t(chat_id, "searching_place"))
     loc = geocode_place(text, accept_language=user_lang)
     if not loc:
-        await update.message.reply_text(t(chat_id, "place_not_found"))
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton(t(chat_id, "btn_home"), callback_data="back_home")]])
+        await status_msg.edit_text(t(chat_id, "place_not_found"), reply_markup=kb)
         return
+
     save_user(chat_id, loc={"lat": loc.lat, "lon": loc.lon, "name": loc.name})
-    await update.message.reply_text(t(chat_id, "location_saved", name=loc.name))
+    pending_action.pop(chat_id, None)
+    await status_msg.edit_text(t(chat_id, "location_saved", name=loc.name), parse_mode="HTML")
+    await send_weather_card(update.message, chat_id, days=3, edit=False)
+
 
 async def now_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    prefs = get_user_pref(chat_id)
-    if not prefs.get("latitude"):
-        await update.message.reply_text(t(chat_id, "no_location"))
-        return
-    await update.message.reply_text(t(chat_id, "fetching_weather"))
-    data = fetch_weather(prefs["latitude"], prefs["longitude"], units=prefs["units"], days=3)
-    if not data:
-        await update.message.reply_text(t(chat_id, "fetch_failed"))
-        return
-    txt = format_current_and_forecast(data, prefs["location_name"] or "Your Location", units=prefs["units"], days=3, lang=prefs["language"])
-    lang = prefs.get("language", "en")
-    refresh_text = "🔄 Refresh" if lang == "en" else "🔄 تحديث" if lang == "ar" else "🔄 Actualiser"
-    kb = InlineKeyboardMarkup([[InlineKeyboardButton(refresh_text, callback_data="refresh_now")]])
-    await update.message.reply_html(txt, reply_markup=kb)
+    await send_weather_card(update.message, update.effective_chat.id, days=3, edit=False)
+
 
 async def forecast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    await update.message.reply_text(t(chat_id, "choose_forecast"), reply_markup=InlineKeyboardMarkup([
-        [InlineKeyboardButton("3", callback_data="fc_3"), InlineKeyboardButton("5", callback_data="fc_5")],
-        [InlineKeyboardButton("7", callback_data="fc_7")]
-    ]))
+    await update.message.reply_text(
+        t(chat_id, "choose_forecast"),
+        reply_markup=InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("3 Days", callback_data="fc_new_3"),
+                InlineKeyboardButton("5 Days", callback_data="fc_new_5"),
+                InlineKeyboardButton("7 Days", callback_data="fc_new_7"),
+            ],
+            [InlineKeyboardButton(t(chat_id, "btn_home"), callback_data="back_home")],
+        ]),
+    )
+
 
 async def forecastX_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cmd = update.message.text.strip().lower()
     days = 3 if cmd.endswith("3") else 5 if cmd.endswith("5") else 7
-    chat_id = update.effective_chat.id
-    prefs = get_user_pref(chat_id)
-    if not prefs.get("latitude"):
-        await update.message.reply_text(t(chat_id, "no_location"))
-        return
-    await update.message.reply_text(t(chat_id, "fetching_weather"))
-    data = fetch_weather(prefs["latitude"], prefs["longitude"], units=prefs["units"], days=days)
-    if not data:
-        await update.message.reply_text(t(chat_id, "fetch_failed"))
-        return
-    txt = format_current_and_forecast(data, prefs["location_name"] or "Your Location", units=prefs["units"], days=days, lang=prefs["language"])
-    await update.message.reply_html(txt)
+    await send_weather_card(update.message, update.effective_chat.id, days=days, edit=False)
 
-async def units_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    prefs = get_user_pref(chat_id)
-    current = prefs["units"]
-    await update.message.reply_text(t(chat_id, "choose_units"), reply_markup=InlineKeyboardMarkup([
-        [InlineKeyboardButton("°C (Metric)", callback_data="units_metric"), InlineKeyboardButton("°F (Imperial)", callback_data="units_imperial")]
-    ]))
-
-async def daily_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    prefs = get_user_pref(chat_id)
-    enabled = prefs["daily_enabled"]
-    await update.message.reply_text(t(chat_id, "daily_enabled") if enabled else t(chat_id, "daily_disabled"), reply_markup=InlineKeyboardMarkup([
-        [InlineKeyboardButton("Toggle 🔁", callback_data="toggle_daily")],
-        [InlineKeyboardButton("Set hour ⏰", callback_data="set_daily_hour")]
-    ]))
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -567,176 +814,317 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not throttle(chat_id, data):
         return
     prefs = get_user_pref(chat_id)
+
+    if data == "show_help":
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton(t(chat_id, "btn_home"), callback_data="back_home")]])
+        await query.edit_message_text(t(chat_id, "help"), parse_mode="HTML", reply_markup=kb)
+        return
+
+    if data == "back_home":
+        name = query.from_user.first_name or "there"
+        await query.edit_message_text(
+            t(chat_id, "welcome", name=name),
+            parse_mode="HTML",
+            reply_markup=build_home_keyboard(chat_id),
+        )
+        return
+
+    if data == "quick_now":
+        await send_weather_card(query, chat_id, days=3, edit=True)
+        return
+
+    if data == "quick_fc":
+        await query.edit_message_text(
+            t(chat_id, "choose_forecast"),
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("3 Days", callback_data="fc_3"),
+                    InlineKeyboardButton("5 Days", callback_data="fc_5"),
+                    InlineKeyboardButton("7 Days", callback_data="fc_7"),
+                ],
+                [InlineKeyboardButton(t(chat_id, "btn_home"), callback_data="back_home")],
+            ]),
+        )
+        return
+
+    if data.startswith("fc_new_"):
+        days = int(data.split("_")[2])
+        await send_weather_card(query, chat_id, days=days, edit=True)
+        return
+
     if data.startswith("fc_"):
         days = int(data.split("_")[1])
+        await send_weather_card(query, chat_id, days=days, edit=True)
+        return
+
+    if data.startswith("refresh_"):
+        days = int(data.split("_")[1])
+        await send_weather_card(query, chat_id, days=days, edit=True)
+        return
+
+    if data == "view_hourly":
         if not prefs.get("latitude"):
-            await query.edit_message_text(t(chat_id, "no_location"))
+            await query.edit_message_text(t(chat_id, "no_location"), reply_markup=build_home_keyboard(chat_id))
             return
-        await query.edit_message_text("Fetching...")
-        dataw = fetch_weather(prefs["latitude"], prefs["longitude"], units=prefs["units"], days=days)
+        dataw = fetch_weather(prefs["latitude"], prefs["longitude"], units=prefs["units"], days=1)
         if not dataw:
-            await query.message.reply_text(t(chat_id, "fetch_failed"))
+            await query.edit_message_text(t(chat_id, "fetch_failed"), reply_markup=build_home_keyboard(chat_id))
             return
-        txt = format_current_and_forecast(dataw, prefs["location_name"] or "Your Location", units=prefs["units"], days=days, lang=prefs["language"])
-        await query.message.reply_html(txt)
+        txt = format_hourly_forecast(dataw, prefs["location_name"] or "Your Location", prefs["units"], prefs["language"])
+        kb = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(t(chat_id, "btn_back"), callback_data="fc_3"),
+                InlineKeyboardButton(t(chat_id, "btn_home"), callback_data="back_home"),
+            ]
+        ])
+        await query.edit_message_text(txt, parse_mode="HTML", reply_markup=kb)
         return
+
+    if data == "prompt_location":
+        pending_action[chat_id] = "set_location"
+        await query.message.reply_html(t(chat_id, "ask_location"), reply_markup=compact_location_keyboard(chat_id))
+        return
+
+    if data == "toggle_alerts":
+        new_state = not prefs.get("alerts_enabled", True)
+        save_user(chat_id, alerts_enabled=1 if new_state else 0)
+        await query.edit_message_text(
+            t(chat_id, "settings_title"), parse_mode="HTML", reply_markup=build_settings_keyboard(chat_id)
+        )
+        return
+
     if data.startswith("units_"):
-        sel = data.split("_")[1]
-        units = "metric" if sel == "metric" else "imperial"
+        units = "metric" if data == "units_metric" else "imperial"
         save_user(chat_id, units=units)
-        try:
-            await query.edit_message_text(t(chat_id, "settings_title"), reply_markup=build_settings_keyboard(chat_id))
-        except Exception:
-            pass
+        await query.edit_message_text(
+            t(chat_id, "settings_title"), parse_mode="HTML", reply_markup=build_settings_keyboard(chat_id)
+        )
         return
+
     if data == "set_lang":
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("English 🇬🇧", callback_data="lang_en"), InlineKeyboardButton("العربية 🇩🇿", callback_data="lang_ar")],
             [InlineKeyboardButton("Français 🇫🇷", callback_data="lang_fr")],
-            [InlineKeyboardButton("« Back" if prefs.get("language")=="en" else "« رجوع" if prefs.get("language")=="ar" else "« Retour", callback_data="back_to_settings")]
+            [
+                InlineKeyboardButton(t(chat_id, "btn_back"), callback_data="back_to_settings"),
+                InlineKeyboardButton(t(chat_id, "btn_home"), callback_data="back_home"),
+            ],
         ])
         await query.edit_message_text(t(chat_id, "choose_lang"), reply_markup=kb)
         return
+
     if data.startswith("lang_"):
-        new_lang = data.split("_")[1]
-        save_user(chat_id, language=new_lang)
-        try:
-            await query.edit_message_text(t(chat_id, "settings_title"), reply_markup=build_settings_keyboard(chat_id))
-        except Exception:
-            pass
+        save_user(chat_id, language=data.split("_")[1])
+        await query.edit_message_text(
+            t(chat_id, "settings_title"), parse_mode="HTML", reply_markup=build_settings_keyboard(chat_id)
+        )
         return
 
     if data == "set_units":
         current = prefs["units"]
         kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("°C (Metric)" + (" ✓" if current == "metric" else ""), callback_data="units_metric"), 
-             InlineKeyboardButton("°F (Imperial)" + (" ✓" if current == "imperial" else ""), callback_data="units_imperial")],
-            [InlineKeyboardButton("« Back" if prefs.get("language")=="en" else "« رجوع" if prefs.get("language")=="ar" else "« Retour", callback_data="back_to_settings")]
+            [
+                InlineKeyboardButton("°C (Metric)" + (" ✓" if current == "metric" else ""), callback_data="units_metric"),
+                InlineKeyboardButton("°F (Imperial)" + (" ✓" if current == "imperial" else ""), callback_data="units_imperial"),
+            ],
+            [
+                InlineKeyboardButton(t(chat_id, "btn_back"), callback_data="back_to_settings"),
+                InlineKeyboardButton(t(chat_id, "btn_home"), callback_data="back_home"),
+            ],
         ])
         await query.edit_message_text(t(chat_id, "choose_units"), reply_markup=kb)
         return
+
     if data == "set_daily":
         enabled = prefs["daily_enabled"]
         hour = prefs.get("daily_hour", 8)
-        lang = prefs.get("language", "en")
-        status = f"Status: {'ON' if enabled else 'OFF'}" + (f" at {hour}:00" if enabled else "")
+        status = f"Status: <b>{'ON' if enabled else 'OFF'}</b>" + (f" at {hour}:00" if enabled else "")
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton(f"Toggle: {'ON' if enabled else 'OFF'} 🔁", callback_data="toggle_daily")],
             [InlineKeyboardButton("Set hour ⏰", callback_data="set_daily_hour")],
-            [InlineKeyboardButton("« Back" if lang=="en" else "« رجوع" if lang=="ar" else "« Retour", callback_data="back_to_settings")]
+            [
+                InlineKeyboardButton(t(chat_id, "btn_back"), callback_data="back_to_settings"),
+                InlineKeyboardButton(t(chat_id, "btn_home"), callback_data="back_home"),
+            ],
         ])
-        await query.edit_message_text(f"⏰ Daily Alert\n\n{status}", reply_markup=kb)
+        await query.edit_message_text(f"⏰ <b>Daily Alert</b>\n\n{status}", parse_mode="HTML", reply_markup=kb)
         return
+
     if data == "toggle_daily":
         enabled = not prefs["daily_enabled"]
         save_user(chat_id, daily=1 if enabled else 0)
         if context.job_queue:
-            jobs = context.job_queue.get_jobs_by_name(str(chat_id))
-            for j in jobs:
+            for j in context.job_queue.get_jobs_by_name(str(chat_id)):
                 j.schedule_removal()
             if enabled:
                 h = prefs.get("daily_hour", 8)
-                context.job_queue.run_daily(send_daily_weather, time=datetime.time(h, 0), chat_id=chat_id, name=str(chat_id))
-        prefs = get_user_pref(chat_id)
+                context.job_queue.run_daily(
+                    send_daily_weather, time=datetime.time(h, 0), chat_id=chat_id, name=str(chat_id)
+                )
         hour = prefs.get("daily_hour", 8)
-        lang = prefs.get("language", "en")
-        status = f"Status: {'ON' if enabled else 'OFF'}" + (f" at {hour}:00" if enabled else "")
+        status = f"Status: <b>{'ON' if enabled else 'OFF'}</b>" + (f" at {hour}:00" if enabled else "")
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton(f"Toggle: {'ON' if enabled else 'OFF'} 🔁", callback_data="toggle_daily")],
             [InlineKeyboardButton("Set hour ⏰", callback_data="set_daily_hour")],
-            [InlineKeyboardButton("« Back" if lang=="en" else "« رجوع" if lang=="ar" else "« Retour", callback_data="back_to_settings")]
+            [
+                InlineKeyboardButton(t(chat_id, "btn_back"), callback_data="back_to_settings"),
+                InlineKeyboardButton(t(chat_id, "btn_home"), callback_data="back_home"),
+            ],
         ])
-        try:
-            await query.edit_message_text(f"⏰ Daily Alert\n\n{status}", reply_markup=kb)
-        except Exception:
-            pass
-        return
-    if data == "set_daily_hour":
-        pending_action[chat_id] = "set_hour"
-        try:
-            await query.edit_message_text(t(chat_id, "ask_hour"), reply_markup=None)
-        except Exception:
-            pass
-        return
-    if data == "back_to_settings":
-        try:
-            await query.edit_message_text(t(chat_id, "settings_title"), reply_markup=build_settings_keyboard(chat_id))
-        except Exception:
-            pass
-        return
-    if data == "refresh_now":
-        prefs = get_user_pref(chat_id)
-        if not prefs.get("latitude"):
-            await query.answer(t(chat_id, "no_location"), show_alert=True)
-            return
-        await query.answer("🔄 Refreshing...")
-        dataw = fetch_weather(prefs["latitude"], prefs["longitude"], units=prefs["units"], days=3)
-        if not dataw:
-            await query.answer(t(chat_id, "fetch_failed"), show_alert=True)
-            return
-        txt = format_current_and_forecast(dataw, prefs["location_name"] or "Your Location", units=prefs["units"], days=3, lang=prefs["language"])
-        lang = prefs.get("language", "en")
-        refresh_text = "🔄 Refresh" if lang == "en" else "🔄 تحديث" if lang == "ar" else "🔄 Actualiser"
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton(refresh_text, callback_data="refresh_now")]])
-        try:
-            await query.edit_message_text(txt, parse_mode="HTML", reply_markup=kb)
-        except Exception:
-            pass
+        await query.edit_message_text(f"⏰ <b>Daily Alert</b>\n\n{status}", parse_mode="HTML", reply_markup=kb)
         return
 
+    if data == "set_daily_hour":
+        pending_action[chat_id] = "set_hour"
+        await query.edit_message_text(t(chat_id, "ask_hour"), parse_mode="HTML")
+        return
+
+    if data == "back_to_settings":
+        await query.edit_message_text(
+            t(chat_id, "settings_title"), parse_mode="HTML", reply_markup=build_settings_keyboard(chat_id)
+        )
+        return
+
+
 async def send_daily_weather(context: ContextTypes.DEFAULT_TYPE):
-    job = context.job
-    chat_id = job.chat_id
+    chat_id = context.job.chat_id
     prefs = get_user_pref(chat_id)
     if not prefs or not prefs.get("latitude"):
         return
     data = fetch_weather(prefs["latitude"], prefs["longitude"], units=prefs["units"], days=3)
     if not data:
-        await context.bot.send_message(chat_id=chat_id, text=t(chat_id, "fetch_failed"))
         return
     header = t(chat_id, "weather_prefix_daily_notice")
-    txt = format_current_and_forecast(data, prefs["location_name"] or "Your Location", units=prefs["units"], days=3, lang=prefs["language"])
-    await context.bot.send_message(chat_id=chat_id, text=header)
-    await context.bot.send_message(chat_id=chat_id, text=txt, parse_mode="HTML")
+    txt = format_current_and_forecast(
+        data, prefs["location_name"] or "Your Location", units=prefs["units"], days=3, lang=prefs["language"]
+    )
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=f"{header}\n\n{txt}",
+        parse_mode="HTML",
+        reply_markup=build_weather_keyboard(chat_id, 3),
+    )
+
+
+def evaluate_severe_weather(data: dict, units: str, lang: str) -> Optional[Tuple[str, str]]:
+    current = data.get("current", {})
+    if not current:
+        return None
+    wc = current.get("weathercode", 0)
+    temp = current.get("temperature_2m", 20)
+    wind = current.get("windspeed_10m", 0)
+
+    temp_c = (temp - 32) * 5 / 9 if units == "imperial" else temp
+    wind_kmh = wind * 1.60934 if units == "imperial" else wind
+
+    warnings = []
+    sig_parts = []
+
+    if wc in (65, 67, 75, 82, 86, 95, 96, 99):
+        warnings.append(describe_weather_code(wc, lang))
+        sig_parts.append(f"wc:{wc}")
+    if wind_kmh >= 60:
+        msg = f"💨 Strong winds ({wind} {'mph' if units == 'imperial' else 'km/h'})"
+        warnings.append(msg)
+        sig_parts.append("wind_high")
+    if temp_c >= 40:
+        msg = f"🔥 Extreme heat ({temp}°{'F' if units == 'imperial' else 'C'})"
+        warnings.append(msg)
+        sig_parts.append("heat_high")
+    elif temp_c <= -5:
+        msg = f"🥶 Freezing cold ({temp}°{'F' if units == 'imperial' else 'C'})"
+        warnings.append(msg)
+        sig_parts.append("cold_low")
+
+    if not warnings:
+        return None
+    return "|".join(sig_parts), "\n".join(f"• {w}" for w in warnings)
+
+
+async def check_severe_weather_alerts(context: ContextTypes.DEFAULT_TYPE):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute(
+        "SELECT chat_id, latitude, longitude, location_name, units, language, last_alert_sig FROM users WHERE alerts_enabled=1 AND latitude IS NOT NULL"
+    )
+    rows = c.fetchall()
+    conn.close()
+
+    for chat_id, lat, lon, loc_name, units, lang, last_sig in rows:
+        data = fetch_weather(lat, lon, units=units or "metric", days=1)
+        if not data:
+            continue
+        res = evaluate_severe_weather(data, units or "metric", lang or "en")
+        if not res:
+            if last_sig:
+                save_user(chat_id, last_alert_sig="")
+            continue
+
+        sig, body = res
+        if sig != last_sig:
+            save_user(chat_id, last_alert_sig=sig)
+            city = (loc_name or "Your Location").split(",")[0].strip()
+            title = TRANSLATIONS.get(lang or "en", TRANSLATIONS["en"])["severe_alert_title"].format(city=city)
+            try:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"{title}\n\n{body}",
+                    parse_mode="HTML",
+                    reply_markup=build_weather_keyboard(chat_id, 3),
+                )
+            except Exception as e:
+                logger.warning(f"Failed to send alert to {chat_id}: {e}")
+
+
+async def post_init(application: Application):
+    await application.bot.set_my_commands([
+        BotCommand("start", "Start & quick menu"),
+        BotCommand("now", "Current weather"),
+        BotCommand("forecast", "3, 5, or 7-day forecast"),
+        BotCommand("location", "Set location (GPS, city, lat/lon)"),
+        BotCommand("settings", "Language, units & alerts"),
+        BotCommand("help", "Help & instructions"),
+    ])
+
+    if application.job_queue:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT chat_id, daily_enabled, daily_hour FROM users WHERE daily_enabled=1")
+        rows = c.fetchall()
+        conn.close()
+        for chat_id, _, hour in rows:
+            try:
+                h = int(hour) if hour is not None else 8
+                application.job_queue.run_daily(
+                    send_daily_weather, time=datetime.time(h, 0), chat_id=int(chat_id), name=str(chat_id)
+                )
+            except Exception:
+                logger.exception("Failed to schedule job for user %s", chat_id)
+
+        application.job_queue.run_repeating(check_severe_weather_alerts, interval=7200, first=60)
+
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error(msg="Exception while handling an update:", exc_info=context.error)
 
-def reschedule_jobs_on_start(application: Application):
-    if not application.job_queue:
-        logger.warning("Job queue is not available, skipping job scheduling")
-        return
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT chat_id, daily_enabled, daily_hour FROM users WHERE daily_enabled=1")
-    rows = c.fetchall()
-    conn.close()
-    for chat_id, enabled, hour in rows:
-        try:
-            h = int(hour) if hour is not None else 8
-            application.job_queue.run_daily(send_daily_weather, time=datetime.time(h, 0), chat_id=int(chat_id), name=str(chat_id))
-        except Exception:
-            logger.exception("Failed to schedule job for user %s", chat_id)
 
 def main():
-    application = Application.builder().token(BOT_TOKEN).build()
-    # Job queue is automatically initialized in recent versions
+    application = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("location", location_command))
     application.add_handler(CommandHandler("settings", settings_command))
     application.add_handler(CommandHandler("now", now_command))
     application.add_handler(CommandHandler("forecast", forecast_command))
     application.add_handler(CommandHandler("forecast3", forecastX_command))
     application.add_handler(CommandHandler("forecast5", forecastX_command))
     application.add_handler(CommandHandler("forecast7", forecastX_command))
-    application.add_handler(CommandHandler("units", units_command))
-    application.add_handler(CommandHandler("daily", daily_command))
     application.add_handler(MessageHandler(filters.LOCATION, handle_location_message))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     application.add_handler(CallbackQueryHandler(callback_handler))
     application.add_error_handler(error_handler)
-    reschedule_jobs_on_start(application)
     application.run_polling()
+
 
 if __name__ == "__main__":
     main()

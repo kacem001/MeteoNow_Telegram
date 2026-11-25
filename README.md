@@ -1,334 +1,185 @@
-# 🌤️ Telegram Weather Bot
+<div align="center">
 
-A professional, feature-rich Telegram bot that provides real-time weather information with a beautiful interface. Supports multiple languages, daily alerts, and customizable units.
+# 🌤️ MeteoNow
 
-![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+**A fast, multilingual Telegram weather assistant with real-time severe weather alerts, interactive forecasts, and scheduled daily briefings.**
 
-## ✨ Features
+[![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![python-telegram-bot](https://img.shields.io/badge/python--telegram--bot-20%2B-26A5E4?style=for-the-badge&logo=telegram&logoColor=white)](https://docs.python-telegram-bot.org/)
+[![Open-Meteo API](https://img.shields.io/badge/API-Open--Meteo-orange?style=for-the-badge)](https://open-meteo.com/)
+[![SQLite](https://img.shields.io/badge/Database-SQLite3-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
 
-- **🌍 Multi-Language Support**: English, Arabic, and French
-- **📍 Location-Based Weather**: Share your location or search by city name
-- **🌡️ Dual Unit System**: Switch between Celsius (Metric) and Fahrenheit (Imperial)
-- **📅 Extended Forecasts**: Get 3, 5, or 7-day weather forecasts
-- **⏰ Daily Alerts**: Automatic morning weather notifications at your chosen time
-- **🔄 Real-Time Updates**: Refresh button for instant weather updates
-- **📊 Comprehensive Data**: Temperature, humidity, pressure, wind speed, precipitation, sunrise/sunset
-- **💾 User Preferences**: Saves location, language, units, and alert settings
-- **🎨 Professional UI**: Clean, modern interface with intuitive buttons
-
-## 📸 Screenshots
-
-The bot displays weather in a beautifully formatted layout:
-```
-╔═══════════════════════════
-║ 📍 Annaba
-║ 🕐 Algiers
-╚═══════════════════════════
-
-🌡 12.8°C  ⛅ Partly cloudy
-
-💨 8.2 km/h │ 💧 61% │ 🌪 1018 hPa
-
-─────────────────────────
-Forecast (3 days):
-─────────────────────────
-Fri, Nov 28
-  🌦 Rain showers: slight
-  🌡 10° ─ 14°  │  ☔ 5.1mm
-  🌅 Sunrise: 07:20  │  🌇 Sunset: 17:13
-```
-
-## 🚀 Installation
-
-### Prerequisites
-
-- Python 3.8 or higher
-- A Telegram Bot Token (from [@BotFather](https://t.me/BotFather))
-- Internet connection
-
-### Step 1: Install Python
-
-Download and install Python from [python.org](https://www.python.org/downloads/)
-
-**Windows**: Make sure to check "Add Python to PATH" during installation
-
-**Linux/Mac**: Python is usually pre-installed. Check with:
-```bash
-python3 --version
-```
-
-### Step 2: Get Your Bot Token
-
-1. Open Telegram and search for [@BotFather](https://t.me/BotFather)
-2. Send `/newbot` command
-3. Follow the instructions to create your bot
-4. Copy the **Bot Token** (looks like: `123456789:ABCdefGHIjklMNOpqrsTUVwxyz`)
-
-### Step 3: Setup the Bot
-
-1. **Extract the files** to a folder (e.g., `WeatherBot`)
-
-2. **Install required packages**:
-
-   **Windows (PowerShell)**:
-   ```powershell
-   pip install python-telegram-bot requests python-dotenv
-   ```
-
-   **Linux/Mac (Terminal)**:
-   ```bash
-   pip3 install python-telegram-bot requests python-dotenv
-   ```
-
-3. **Create a `.env` file** in the same folder as `main.py`:
-
-   Create a new file named `.env` (exactly, with the dot at the beginning) and add:
-   ```
-   BOT_TOKEN=your_bot_token_here
-   ```
-   
-   Replace `your_bot_token_here` with the token you got from BotFather.
-
-   **Example**:
-   ```
-   BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
-   ```
-
-## ▶️ Running the Bot
-
-### Windows
-
-1. Open PowerShell in the bot folder
-2. Run:
-   ```powershell
-   python main.py
-   ```
-
-### Linux/Mac
-
-1. Open Terminal in the bot folder
-2. Run:
-   ```bash
-   python3 main.py
-   ```
-
-### Success!
-
-If everything is set up correctly, you'll see:
-```
-INFO - Application started
-```
-
-The bot is now running! Keep the terminal/PowerShell window open.
-
-## 📱 Using the Bot
-
-### Basic Commands
-
-| Command | Description |
-|---------|-------------|
-| `/start` | Start the bot and get welcome message |
-| `/help` | Show all available commands |
-| `/now` | Get current weather |
-| `/forecast` | Choose forecast length (3/5/7 days) |
-| `/forecast3` | Get 3-day forecast |
-| `/forecast5` | Get 5-day forecast |
-| `/forecast7` | Get 7-day forecast |
-| `/settings` | Open settings menu |
-| `/units` | Change temperature units |
-| `/daily` | Configure daily weather alerts |
-
-### Setting Up Your Location
-
-**Option 1: Share Location**
-1. Send `/start`
-2. Click "Share location 📍" button
-3. Allow Telegram to access your location
-
-**Option 2: Type City Name**
-- Just type any city name (e.g., "London", "Paris", "New York")
-- The bot will save it automatically
-
-### Configuring Settings
-
-Send `/settings` to access:
-
-- **🌍 Language**: Choose English, Arabic (العربية), or French (Français)
-- **🌡️ Units**: Switch between °C (Metric) and °F (Imperial)
-- **⏰ Daily Alert**: 
-  - Toggle ON/OFF
-  - Set your preferred notification time (0-23 hour format)
-
-### Daily Weather Alerts
-
-1. Send `/daily` or go to Settings
-2. Toggle daily alerts ON
-3. Click "Set hour ⏰"
-4. Send your preferred hour (e.g., "8" for 8:00 AM)
-5. You'll receive automatic weather updates every morning!
-
-## 🗂️ File Structure
-
-```
-WeatherBot/
-├── main.py                 # Main bot code
-├── .env                    # Your bot token (create this)
-├── README.md              # This file
-└── main_weather_bot.db    # Database (auto-created)
-```
-
-## 🔧 Troubleshooting
-
-### "ModuleNotFoundError: No module named 'telegram'"
-**Solution**: Install the required packages:
-```bash
-pip install python-telegram-bot requests python-dotenv
-```
-
-### "RuntimeError: Put BOT_TOKEN in .env file"
-**Solution**: 
-- Make sure `.env` file exists in the same folder as `main.py`
-- Check that it contains: `BOT_TOKEN=your_actual_token`
-- No spaces around the `=` sign
-
-### Bot doesn't respond
-**Solution**:
-- Make sure the Python script is running (check terminal/PowerShell)
-- Verify your bot token is correct
-- Check your internet connection
-
-### "Failed to fetch weather"
-**Solution**:
-- Check your internet connection
-- The weather API (Open-Meteo) might be temporarily down
-- Try again in a few moments
-
-### Database locked error
-**Solution**:
-- Close any other instances of the bot
-- Delete `main_weather_bot.db` file (your settings will reset)
-- Restart the bot
-
-## 🌐 APIs Used
-
-- **Weather Data**: [Open-Meteo](https://open-meteo.com/) - Free weather API
-- **Geocoding**: [Nominatim/OpenStreetMap](https://nominatim.openstreetmap.org/) - Free geocoding service
-- **Telegram Bot API**: For bot functionality
-
-## 📊 Technical Details
-
-- **Language**: Python 3.8+
-- **Framework**: python-telegram-bot
-- **Database**: SQLite3
-- **Weather API**: Open-Meteo (no API key required)
-- **Storage**: Local SQLite database for user preferences
-
-## 🔐 Privacy & Data
-
-The bot stores locally:
-- User's chat ID (Telegram identifier)
-- Last saved location (coordinates and name)
-- Preferred language, units, and alert settings
-
-**No personal data** (name, phone, etc.) is collected or stored.
-
-## 📝 Customization
-
-### Customizing Welcome Messages and Text
-
-You can customize all bot messages by editing the `TRANSLATIONS` dictionary in `main.py`:
-
-**English** - Starting at **line 29**:
-```python
-"en": {
-    "welcome": "Hello {name}! I'm a weather bot. ...",  # Line 29
-    "help": "Commands:\n/start - start\n...",
-    ...
-}
-```
-
-**Arabic** - Starting at **line 57**:
-```python
-"ar": {
-    "welcome": "مرحبا {name}! أنا بوت الطقس. ...",  # Line 57
-    "help": "الأوامر:\n/start - البداية\n...",
-    ...
-}
-```
-
-**French** - Starting at **line 85**:
-```python
-"fr": {
-    "welcome": "Bonjour {name}! Je suis un bot météo. ...",  # Line 85
-    "help": "Commandes:\n/start - démarrer\n...",
-    ...
-}
-```
-
-Simply edit the text inside the quotes to customize any message!
-
-### Adding More Languages
-
-To add a new language, copy one of the existing language blocks and translate all messages:
-```python
-TRANSLATIONS = {
-    "en": { ... },
-    "ar": { ... },
-    "fr": { ... },
-    "es": {  # Add Spanish
-        "welcome": "¡Hola {name}! Soy un bot del tiempo. ...",
-        "help": "Comandos:\n/start - iniciar\n...",
-        # ... translate all other messages
-    }
-}
-```
-
-Then add the new language button in the settings (around line 600):
-```python
-[InlineKeyboardButton("Español 🇪🇸", callback_data="lang_es")]
-```
-
-### Changing Default Settings
-
-Modify the default values in `get_user_pref()` function (around line 170):
-```python
-return {
-    "units": "metric",      # Change to "imperial" for Fahrenheit
-    "daily_hour": 8,        # Change default alert time
-    "language": "en",       # Change default language
-    ...
-}
-```
-
-## 🆘 Support
-
-For issues or questions:
-1. Check the Troubleshooting section above
-2. Ensure all prerequisites are met
-3. Verify your `.env` file is configured correctly
-
-## 📄 License
-
-This project is provided as-is for personal or commercial use.
-
-## 🎯 Future Features
-
-Potential enhancements you could add:
-- Air quality index
-- UV index
-- Weather alerts/warnings
-- Multiple saved locations
-- Weather maps
-- Historical weather data
-- Admin panel for managing users
-
-## 👨‍💻 About
-
-Professional Telegram Weather Bot with modern UI/UX design, built with Python and the python-telegram-bot library.
+</div>
 
 ---
 
-**Enjoy your weather bot! ☀️🌧️❄️**
+## 📖 Overview
 
-For any customization or additional features, the code is well-commented and easy to modify.
+**MeteoNow** is an asynchronous, full-featured Telegram bot designed for frictionless weather tracking. Built with `python-telegram-bot` and powered by the **Open-Meteo** and **Nominatim (OpenStreetMap)** APIs, it delivers accurate current conditions, 12-hour breakdowns, multi-day forecasts, automated morning reports, and background severe weather monitoring—all without requiring paid third-party weather API keys.
+
+---
+
+## ✨ Key Features
+
+- **📍 Flexible Location Input**
+  - **GPS Sharing**: Compact, non-intrusive reply keyboard with automatic reverse geocoding into readable city names.
+  - **City Search**: Instant global city lookup with smart caching.
+  - **Raw Coordinates**: Direct support for pasting `latitude, longitude` pairs (e.g., `36.7538, 3.0588`).
+- **⚡ Seamless Inline UI**
+  - Interactive forecast cards that update **in place** (`3d`, `5d`, `7d` switchers, `🕒 Today Hourly`, `🔄 Refresh`, and quick `🏠 Home` navigation).
+  - Native Telegram `/` command menu integration alongside button-driven navigation.
+- **🚨 Real-Time Severe Weather Watcher**
+  - Background job running every 2 hours to monitor subscribed users' locations for thunderstorms, heavy rain/snow, gale-force winds ($\ge 60\text{ km/h}$), extreme heat ($\ge 40^\circ\text{C}$), or freezing temperatures ($\le -5^\circ\text{C}$), with deduplication to prevent notification spam.
+- **⏰ Scheduled Daily Briefings**
+  - Customizable morning weather notifications delivered automatically at the user's preferred hour (`00:00`–`23:00`).
+- **🌍 Automatic Multi-Language Support**
+  - Auto-detects the user's Telegram client locale on `/start` and supports seamless switching between **English**, **Arabic (العربية)**, and **French (Français)**.
+- **🌡️ Dual Measurement Systems**
+  - Instant toggling between **Metric** (`°C`, `km/h`, `mm`) and **Imperial** (`°F`, `mph`, `in`).
+
+---
+
+## 📸 Preview
+
+```text
+📍 Algiers  •  🕐 Algiers
+━━━━━━━━━━━━━━━━━━━━━
+🌡 21.4°C  ⛅ Partly cloudy
+🤒 Feels like: 20.8°C
+
+💨 11.5 km/h │ 💧 58% │ 🌪 1019 hPa
+
+─────────────────────
+📅 3-Day Forecast
+─────────────────────
+Thu, Nov 26 • ☀️ Clear
+  🌡 14° ─ 23°  │  ☀️ UV: 4.2
+  🌅 Sunrise: 07:38  │  🌇 Sunset: 17:32
+
+Fri, Nov 27 • 🌦 Slight rain
+  🌡 13° ─ 19°  │  ☔ 3.4mm
+
+Sat, Nov 28 • ⛅ Partly cloudy
+  🌡 12° ─ 20°
+
+[ • 3d • ]  [  5d  ]  [  7d  ]
+[ 🕒 Today Hourly ] [ 🔄 Refresh ]
+[            🏠 Home            ]
+```
+
+---
+
+## 🛠️ Tech Stack
+
+| Component | Technology | Purpose |
+| :--- | :--- | :--- |
+| **Language** | Python 3.9+ | Core application logic |
+| **Bot Framework** | `python-telegram-bot` (v20+ `JobQueue`) | Async Telegram API handling & scheduled tasks |
+| **Weather Data** | [Open-Meteo API](https://open-meteo.com/) | Current, hourly, and 7-day forecast data |
+| **Geocoding** | [Nominatim (OSM)](https://nominatim.openstreetmap.org/) | Forward & reverse geocoding |
+| **Persistence** | SQLite3 | Lightweight user preferences & alert state storage |
+
+---
+
+## 🚀 Getting Started
+
+### 1. Prerequisites
+
+- Python **3.9** or higher
+- A Telegram Bot Token obtained from [@BotFather](https://t.me/BotFather)
+
+### 2. Installation
+
+Clone the repository and navigate into the project directory:
+
+```bash
+git clone https://github.com/yourusername/MeteoNow.git
+cd MeteoNow
+```
+
+Create a virtual environment (recommended) and install dependencies:
+
+```bash
+python -m venv venv
+source venv/bin/activate        # Linux / macOS
+# venv\Scripts\activate         # Windows
+
+pip install "python-telegram-bot[job-queue]" requests python-dotenv
+```
+
+> **Note:** Installing `python-telegram-bot[job-queue]` ensures `APScheduler` is installed for daily reports and background severe weather alerts.
+
+### 3. Configuration
+
+Create a `.env` file in the root directory:
+
+```env
+BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
+```
+
+*(Optional)* Configure your bot profile in [@BotFather](https://t.me/BotFather):
+- **Name:** `MeteoNow`
+- **About:** `Real-time weather forecasts, hourly breakdowns, daily morning briefings, and severe weather alerts in English, Français & العربية.`
+
+### 4. Run the Bot
+
+```bash
+python main.py
+```
+
+---
+
+## 💬 Bot Commands
+
+| Command | Description |
+| :--- | :--- |
+| `/start` | Launch the bot, auto-detect language, and open the main menu |
+| `/now` | View current weather and 3-day forecast |
+| `/forecast` | Open interactive forecast duration selector (`3`, `5`, or `7` days) |
+| `/forecast3` | Quick 3-day weather forecast |
+| `/forecast5` | Quick 5-day weather forecast |
+| `/forecast7` | Quick 7-day weather forecast |
+| `/location` | Set location via GPS button, city name, or `lat, lon` coordinates |
+| `/settings` | Configure language, units (`°C`/`°F`), daily briefings, and severe alerts |
+| `/help` | Display usage instructions and available commands |
+
+---
+
+## 🗂️ Project Structure
+
+```text
+MeteoNow/
+├── main.py                  # Core bot handlers, API clients, formatters & background jobs
+├── .env                     # Environment variables (excluded from Git)
+├── .gitignore               # Ignores .env, __pycache__, and local SQLite database
+├── main_weather_bot.db      # SQLite database (auto-generated on first run)
+└── README.md                # Project documentation
+```
+
+---
+
+## 🗺️ Roadmap
+
+- [ ] **MeteoNow Web Dashboard**: Companion web app sharing the user backend to manage alerts and view interactive radar maps.
+- [ ] **Multi-Location Bookmarks**: Save and switch between multiple favorite cities (e.g., *Home*, *Work*, *Travel*).
+- [ ] **Air Quality Index (AQI)**: Real-time air pollution and pollen metrics via Open-Meteo Air Quality API.
+- [ ] **Docker Support**: Official `Dockerfile` and `docker-compose.yml` for one-command cloud deployment.
+
+---
+
+## 🤝 Contributing
+
+Contributions, issues, and feature requests are welcome! Feel free to open an issue or submit a pull request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+---
+
+## 📄 License
+
+Distributed under the **MIT License**. See `LICENSE` for more information.
